@@ -1,0 +1,106 @@
+"""
+Make it more robust.
+Feature & reward engineering.
+"""
+from CourseEnv import env
+from rl import DDPG
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+
+MAX_EPISODES = 500
+MAX_EP_STEPS = 200
+ON_TRAIN = False
+
+os.environ["KMP_DUPLICATE_LIB_OK"]="TRUE"
+# set env
+env = env()
+s_dim = env.state_dim
+a_dim = env.action_dim
+a_bound = env.action_bound
+
+# set RL method (continuous)
+rl = DDPG(a_dim, s_dim, a_bound)
+
+steps = []
+def train():
+    # start training
+    for i in range(MAX_EPISODES):
+        s = env.reset()
+        ep_r = 0.
+
+        for j in range(MAX_EP_STEPS):
+
+            a = rl.choose_action(s)
+
+            s_, r, done = env.step(a)
+
+            rl.store_transition(s, a, r, s_)
+
+            ep_r += r
+            if rl.memory_full:
+                # start to learn once has fulfilled the memory
+                rl.learn()
+            s = s_
+
+            # x = j
+            # y = s[1]
+            # z = s[0]
+            # w = a
+            # # plt.figure(num=i, figsize=(4, 4))
+            # plt.subplot(221)
+            # plt.plot(x,y,'.b')
+            # plt.ylabel("yaw", fontsize=14)
+            # plt.subplot(222)
+            # plt.plot(x,z,'.b')
+            # plt.ylabel("erro", fontsize=14)
+            # plt.subplot(223)
+            # plt.plot(x,w,'.b')
+            # plt.ylabel("delta", fontsize=14)
+
+            if done or j == MAX_EP_STEPS-1:
+
+                # plt.savefig('images/plot1.png', format='png')
+                # plt.show()
+                print('Ep: %i | %s | ep_r: %.1f | step: %i' % (i, '---' if not done else 'done', ep_r, j))
+                break
+
+    rl.save()
+
+def eval():
+    rl.restore()
+
+    while True:
+        s = env.reset()
+        for _ in range(200):
+            a = rl.choose_action(s)
+            s, r, done = env.step(a)
+            x = _
+            y = s[1]
+            z = s[0]
+            w = a
+            # plt.figure(num=i, figsize=(4, 4))
+            plt.subplot(221)
+            plt.plot(x, y,'.b')
+            plt.ylabel("yaw", fontsize=14)
+            plt.subplot(222)
+            plt.plot(x, z,'.b')
+            plt.ylabel("erro", fontsize=14)
+            plt.subplot(223)
+            plt.plot(x, w,'.b')
+            plt.ylabel("delta", fontsize=14)
+            if done :
+                print(' %s | step: %i' % ( '---' if not done else 'done', _))
+                plt.show()
+                break
+        break
+
+        # plt.show()
+
+if ON_TRAIN:
+    train()
+else:
+    eval()
+
+
+
