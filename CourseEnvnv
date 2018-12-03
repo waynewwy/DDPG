@@ -1,0 +1,66 @@
+import numpy as np
+import TransAngle ,random
+class env(object):
+    dt = .1    # refresh rate
+    action_bound = [-35, 35]
+    state_dim = 2
+    action_dim = 1
+
+    def __init__(self):
+        self.K = 1
+        self.T = 0.02
+        self.on_goal = 0
+        self.phi0, self.phi1, self.phi2 = 0, 0, 0
+        self.goal = 10
+    def step(self,action):
+        done = False
+        action = np.clip(action, *self.action_bound)
+
+        self.track_erro = self.goal - self.phi0
+        self.r0 = (self.phi0 - self.phi1) / self.dt
+        self.r0 = TransAngle.TransAngleto180(self.r0)
+        # print('r0',self.r0)
+        self.r1 = (self.phi1 - self.phi2) / self.dt
+        self.r1 = TransAngle.TransAngleto180(self.r1)
+        self.rr0 = (self.r0 - self.r1) / self.dt
+        self.rr0 = TransAngle.TransAngleto180(self.rr0)
+
+        # 一阶KT方程
+        self.r = self.K * action  - self.T * self.rr0
+        self.r = self.r[0]
+
+        # 更新航向
+        self.phi2 = self.phi1
+        self.phi1 = self.phi0
+        self.phi0 = self.phi0 + (self.r + self.r1) * self.dt / 2
+        self.phi0 = TransAngle.TransAngleto360(self.phi0)
+        self.track_erro1 = self.goal - self.phi0
+        # print('r0',self.r0,'r1',self.r1,'rr0',self.rr0,'r',self.r,'phi0',self.phi0,'delta',action)
+        # done and reward #
+        if abs(self.track_erro1) <= 0.5:
+            r = 1 - 2*abs(self.track_erro1)
+            self.on_goal += 1
+            if self.on_goal > 100:
+                done = True
+        else :
+            r = -abs(self.track_erro1)
+            self.on_goal = 0
+       # state #
+        s = np.array((self.track_erro,self.phi0))
+        return s , r , done
+
+
+    def reset(self):
+        # self.goal = np.random.randint(0,10,size=None,dtype='int32')
+        self.phi0,self.phi1,self.phi2 = 0 ,0 ,0
+        self.goal = 10
+        self.on_goal = 0
+        self.track_erro = self.goal - self.phi0
+        s = np.array((self.track_erro,self.phi0))
+        return s
+
+if __name__ == '__main__':
+    env = env()
+    while True:
+        action = 1
+        env.step(action)
