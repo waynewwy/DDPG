@@ -1,62 +1,93 @@
 import numpy as np
-import TransAngle ,random
+import math , sys , TransAngle , random
+sys.path.append('/Users/wayne/PycharmProjects/Path_Tracking/venv/ICONS_Python')
+import ICONS_Python_config
+import ICONS_Python_control
+import ICONS_Python_force
+import ICONS_Python_help
+import ICONS_Python_order
+import ICONS_Python_solver
+
+from ICONS_Python_field import Sea as tField
+from ICONS_Python_vessel.mod_KVLCC2_L7 import KVLCC2_L7 as tShip
 class env(object):
-    dt = .1    # refresh rate
+    # dt = .1    # refresh rate
     action_bound = [-35, 35]
     state_dim = 2
     action_dim = 1
+    # global x0G , u , y0G , v , psi , r , delta , RPS , goal
 
-    def __init__(self):
-        self.K = 1
-        self.T = 0.02
-        self.on_goal = 0
-        self.phi0, self.phi1, self.phi2 = 0, 0, 0
-        self.goal = 10
+    def __init__(self,goal):
+        self.x0G = 0.0  # (m)
+        self.u = 1.179 # (m/s) 1.179 m/s for 7 m KVLCC2
+        self.y0G = 0.0  # (m)
+        self.v = 0.0  # (m/s)
+        self.psi = 0.0  # (rad)
+        self.r = 0.0  # (rad/s)
+        self.delta = 0.0  # (rad)
+        self.RPS = 10.4 # (Hz)
+        self.goal = goal #（°）
     def step(self,action):
         done = False
         action = np.clip(action, *self.action_bound)
 
-        self.track_erro = self.goal - self.phi0
-        self.r0 = (self.phi0 - self.phi1) / self.dt
-        self.r0 = TransAngle.TransAngleto180(self.r0)
-        # print('r0',self.r0)
-        self.r1 = (self.phi1 - self.phi2) / self.dt
-        self.r1 = TransAngle.TransAngleto180(self.r1)
-        self.rr0 = (self.r0 - self.r1) / self.dt
-        self.rr0 = TransAngle.TransAngleto180(self.rr0)
+        tControl = ICONS_Python_control.maneuver_free
+        tConfig = ICONS_Python_config.Config(0.0, 1.0, 1)  # tStart, tEnd, tStep
+        tOrder = None
+        self.delta = action / 180 * np.pi
+        init = np.array([self.x0G,self.u, self.y0G, self.v, self.psi, self.r, self.delta, self.RPS])
 
-        # 一阶KT方程
-        self.r = self.K * action  - self.T * self.rr0
-        self.r = self.r[0]
+        with ICONS_Python_help.Timer():
+            time_rec, state_rec = ICONS_Python_solver.get_integration(
+                init, tOrder, tControl, tShip, tField, tConfig)
 
-        # 更新航向
-        self.phi2 = self.phi1
-        self.phi1 = self.phi0
-        self.phi0 = self.phi0 + (self.r + self.r1) * self.dt / 2
-        self.phi0 = TransAngle.TransAngleto360(self.phi0)
-        self.track_erro1 = self.goal - self.phi0
-        # print('r0',self.r0,'r1',self.r1,'rr0',self.rr0,'r',self.r,'phi0',self.phi0,'delta',action)
+        self.x0G = state_rec[1,0]  # (m)
+        self.u = state_rec[1,1]  # (m/s) 1.179 m/s for 7 m KVLCC2
+        self.y0G = state_rec[1,2]  # (m)
+        self.v = state_rec[1,3]  # (m/s)
+        self.psi = state_rec[1,4]  # (rad)
+        self.r = state_rec[1,5] # (rad/s)
+        self.delta = state_rec[1,6]  # (rad)
+        self.RPS = state_rec[1,7] # (Hz)
+        # 对航向加入gauss噪声 #
+        noise = np.array(random.gauss(0,0.12))
+
+        self.yaw = state_rec [1,4]/ np.pi * 180
+        self.yaw = TransAngle.TransAngleto360(self.yaw)
+        self.psi =self.yaw /180 *np.pi
+        self.track_erro = self.goal - self.yaw
+
         # done and reward #
-        if abs(self.track_erro1) <= 0.5:
-            r = 1 - 2*abs(self.track_erro1)
+        if abs(self.track_erro) <= 0.5:
+            r = 1 - 2*abs(self.track_erro)
             self.on_goal += 1
-            if self.on_goal > 100:
-                done = True
+            if self.on_goal > 50:
+                done = True,
         else :
-            r = -abs(self.track_erro1)
+            r = -abs(self.track_erro)
             self.on_goal = 0
        # state #
-        s = np.array((self.track_erro,self.phi0))
+       #  print(self.yaw)
+        s = np.array((self.track_erro,self.r))
         return s , r , done
 
 
-    def reset(self):
-        # self.goal = np.random.randint(0,10,size=None,dtype='int32')
-        self.phi0,self.phi1,self.phi2 = 0 ,0 ,0
-        self.goal = 10
-        self.on_goal = 0
-        self.track_erro = self.goal - self.phi0
-        s = np.array((self.track_erro,self.phi0))
+    def reset(self,goal):
+        self.goal = goal
+        # self.goal = goal
+        self.x0G = 0.0  # (m)
+        self.u = 1.179    # (m/s) 1.179 m/s for 7 m KVLCC2
+        self.y0G = 0.0  # (m)
+        self.v = 0.0  # (m/s)
+        self.psi = 0.0  # (rad)
+        self.r = 0.0  # (rad/s)
+        self.delta = 0.0  # (rad)
+        self.RPS = 10.4 # (Hz)
+        # init = np.array([x0G, u, y0G, v, psi, r, delta, RPS])
+        # self.goal = 45  #（°）
+        self.yaw = self.psi / np.pi * 180
+        self.track_erro = self.goal - self.yaw
+        s = np.array((self.track_erro,self.r))
         return s
 
 if __name__ == '__main__':
