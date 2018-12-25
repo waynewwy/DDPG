@@ -49,7 +49,7 @@ class env(object):
         self.r = state_rec[1,5] # (rad/s)
         self.delta = state_rec[1,6]  # (rad)
         self.RPS = state_rec[1,7] # (Hz)
-        # 对航向加入gauss噪声 #
+        # 加入gauss噪声 #
         noise = np.array(random.gauss(0,0.12))
 
         self.yaw = state_rec [1,4]/ np.pi * 180
